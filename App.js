@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { Button, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons'; 
+import { Alert, Button, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons'; 
 import { useEffect, useState } from 'react';
 import { TextInput } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,32 +10,39 @@ const MEMO_KEY = "@memo"
 export default function App() {
   const [writing, setWriting] = useState(true) ;
   const [open, setOpen] = useState(false) ;
-  const [text, setText] = useState("") ; 
   const [memo, setMemo] = useState({}) ;
+  const [text, setText] = useState("") ; 
 
   const onChangeText = (payload) => setText(payload) ;
 
   const onClickOpen = async(key) => {
-    setOpen(!open)
+    setOpen(!open) ;
+    const newMemo = {
+      ...memo, 
+      [key]: {...memo[key], open}
+    } ;
+    setMemo(newMemo) ; 
+    saveMemo(newMemo) ; 
   } ; 
 
-  const addToDo = async() => {
+  const addMemo = async() => {
     if(text === "") {
       return
     } ;
-    const message = text.substring(0, 7);
+    const message = text.substring(0, 7) ;
     const newMemo = {
       ...memo, 
-      [Date.now()]: {message, text, writing}
+      [Date.now()]: {message, text, writing, open}
     } ; 
     setMemo(newMemo) ; 
     await saveMemo(newMemo) ; 
     setText("") ; 
+    setWriting(true) ; 
   } ; 
 
   const saveMemo = async(toSave) => {
     await AsyncStorage.setItem(MEMO_KEY, JSON.stringify(toSave)) ; 
-  }
+  } ;
 
   const loadMemo = async() => {
     const save = await AsyncStorage.getItem(MEMO_KEY) ; 
@@ -46,59 +53,70 @@ export default function App() {
     loadMemo() ; 
   }, []) ; 
 
-  // console.log(memo)
+  const DeleteMemo = async(key) => {
+    Alert.alert(
+      "Delete Memo?", "Are you sure?", [
+        {text: "Cancel"},
+        {text: "Sure",
+          style: "destructive",
+          onPress: () => {
+            const newMemo = {...memo} ; 
+            delete newMemo[key] ; 
+            setMemo(newMemo) ; 
+            saveMemo(newMemo) ; 
+        }}, 
+    ]) ;  
+  } ; 
 
   return(
     <View style={styles.container}>
       <StatusBar style="auto" />
       <View style={styles.header}>
-        {/* <Text style={styles.title}> Memo </Text> */}
         <TouchableOpacity
-          onPress={() => setWriting(true)}>
+          onPress={() => {
+            setWriting(true)
+          }}>
           <Text style={{
             ...styles.title, 
             color: writing ? "white" : "gray"
           }}> Memo </Text>
         </TouchableOpacity>
         
-        {text ? 
-        <>
+        {text ? <>
           <View style={{
             ...styles.title, 
             paddingTop: 10, 
           }}>
-            <Button title="저장" onPress={addToDo} /> 
+            <Button title="저장" onPress={addMemo} /> 
           </View>
         </> : <>
           <TouchableOpacity 
-            onPress={() => setWriting(false)}>
+            onPress={() => {
+              setWriting(false)
+            }}>
             <Text style={{
               ...styles.title, 
               color: !writing ? "white" : "gray"
             }}> New </Text>
           </TouchableOpacity>
-        </>}
-
-        
+        </>}        
       </View>
-      {writing ? 
-      <>
+      {writing ? <>
         <ScrollView style={styles.body}>
         {Object.keys(memo).map((key) => (
           <View key={key}>
-            {open ? <>
+            {memo[key].open ? <>
             <TouchableOpacity 
                 style={styles.memoBoxOpen} 
                 activeOpacity={0.8} onPress={() => onClickOpen(key)}>
               <View>
                 <View style={styles.memoTitleBoxOpen}>
                   <Text style={styles.memoTextOpen} > {memo[key].message} </Text>
-                  <TouchableOpacity style={styles.memoDeleteOpen}>
-                      <Ionicons name="trash-outline" color="white" size={22} />
+                  <TouchableOpacity style={styles.memoDeleteOpen} onPress={() => DeleteMemo(key)}>
+                    <Ionicons name="trash-outline" color="white" size={22} />
                   </TouchableOpacity>
                 </View>
-                  <Text style={styles.memoMemoOpen}> {memo[key].text} </Text>
-                  <Text style={styles.memoDateOpen}> 2020.09.12 </Text>
+                <Text style={styles.memoMemoOpen}> {memo[key].text} </Text>
               </View>
             </TouchableOpacity>
             </> : <>
@@ -107,29 +125,27 @@ export default function App() {
                   activeOpacity={0.8} onPress={() => onClickOpen(key)}>
                 <View>
                     <Text style={styles.memoText}> {memo[key].message} </Text>
-                    <Text style={styles.memoDate}> 2020.09.12 </Text>
                 </View>
-                <TouchableOpacity style={styles.memoDelete}>
+                <TouchableOpacity style={styles.memoDelete} onPress={() => DeleteMemo(key)}>
                     <Ionicons name="trash-outline" color="white" size={22} />
                 </TouchableOpacity>
               </TouchableOpacity>
             </>}
           </View>
         ))}
-          
         </ScrollView> 
-      </> : <>
-        <ScrollView style={styles.body}>
-          <TextInput
-            onChangeText={onChangeText} 
-            returnKeyType="done"
-            value={text}
-            placeholder="add memo..."
-            placeholderTextColor="white"
-            multiline ={true}
-            style={styles.input} />
-        </ScrollView>
-      </>}
+        </> : <>
+          <ScrollView style={styles.body}>
+            <TextInput
+              onChangeText={onChangeText} 
+              returnKeyType="done"
+              value={text}
+              placeholder="add memo..."
+              placeholderTextColor="white"
+              multiline ={true}
+              style={styles.input} />
+          </ScrollView>
+        </>}
     </View>
   )
 }
@@ -170,20 +186,12 @@ const styles = StyleSheet.create({
     marginVertical: 5, 
   }, 
   memoText: {
-    // backgroundColor: "red",
     color: "white",
     fontSize: 22, 
     fontWeight: 500, 
     paddingVertical: 5,
   }, 
-  memoDate: {
-    // backgroundColor: "green",
-    color: "white",
-    fontSize: 13, 
-    fontWeight: 400, 
-  }, 
   memoDelete: {
-    // backgroundColor: "red",
     paddingVertical: 10, 
     paddingHorizontal: 10, 
   }, 
@@ -200,7 +208,7 @@ const styles = StyleSheet.create({
   }, 
   memoTitleBoxOpen: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-between", 
   }, 
   memoTextOpen: {
     color: "white",
@@ -214,15 +222,8 @@ const styles = StyleSheet.create({
     fontWeight: 400, 
   },
   memoDeleteOpen: {
-    // backgroundColor: "red",
-    paddingVertical: 5,
-    justifyContent: "flex-end",
+    padding: 10,
   },
-  memoDateOpen: {
-    color: "white",
-    marginTop: 10,
-    // textAlign:"right",
-  }, 
 
   input: {
     backgroundColor: "black",
@@ -234,7 +235,3 @@ const styles = StyleSheet.create({
     padding: 10,
   }
 });
-// 특정 메모 클릭 시 해당 메모만 열리도록
-// 메모 오픈 시 삭제 버튼 위치 조정
-// 날짜 저장 해야 함 
-// 삭제, 수정 기능 구현 
